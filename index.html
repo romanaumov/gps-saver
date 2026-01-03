@@ -461,7 +461,7 @@ gU2F2ZXIiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJ
             
             btn.disabled = true;
             btn.textContent = '📡 Getting GPS fix...';
-            status.textContent = 'Acquiring satellites... (10-30 seconds, works offline!)';
+            status.textContent = 'Acquiring satellites... (10-30 seconds)';
             
             navigator.geolocation.getCurrentPosition(
                 (position) => {
