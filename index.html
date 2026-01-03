@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPS Coordinate Saver</title>
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIkdQUyBDb29yZGluYXRlIFNhdmVyIiwKICAic2hvcnRfbmFtZSI6ICJHUFM
+gU2F2ZXIiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzY2N2VlYSIsCiAgInRoZW1lX2NvbG9yIjogIiM2NjdlZWEiLAogICJpY29ucyI6IFsKICAgIHsKICAgICAgInNyYyI6ICJkYXRhOmltYWdlL3N2Zyt4bWwsJTNDc3ZnIHhtbG5zPSdodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Zycgdmlld0JveD0nMCAwIDEwMCAxMDAnJTNFJTNDY2lyY2xlIGN4PSc1MCcgY3k9JzUwJyByPSc0MCcgZmlsbD0nJTIzNjY3ZWVhJy8lM0UlM0N0ZXh0IHg9JzUwJyB5PSc2MCcgZm9udC1zaXplPSc0MCcgdGV4dC1hbmNob3I9J21pZGRsZScgZmlsbD0nd2hpdGUnJTNF8J+TjSUzQy90ZXh0JTNFJTNDL3N2ZyUzRSIsCiAgICAgICJzaXplcyI6ICIxOTJ4MTkyIiwKICAgICAgInR5cGUiOiAiaW1hZ2Uvc3ZnK3htbCIKICAgIH0KICBdCn0=">
+    <title>GPS Coordinate Saver - Offline</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <style>
         * {
@@ -17,6 +22,28 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
+        }
+        
+        .offline-banner {
+            background: #ff9800;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            display: none;
+        }
+        
+        .online-banner {
+            background: #4caf50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            display: none;
         }
         
         .container {
@@ -194,13 +221,47 @@
         .popup-content strong {
             color: #667eea;
         }
+        
+        .install-prompt {
+            background: #2196F3;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .install-prompt button {
+            background: white;
+            color: #2196F3;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-top: 10px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <div id="installPrompt" class="install-prompt" style="display:none;">
+            📱 Install this app for offline use!
+            <button onclick="installApp()">Install Now</button>
+            <button onclick="dismissInstall()" style="background:#ff4757; color:white; margin-left:10px;">Maybe Later</button>
+        </div>
+        
+        <div id="offlineBanner" class="offline-banner">
+            📡 OFFLINE MODE - GPS still works!
+        </div>
+        
+        <div id="onlineBanner" class="online-banner">
+            🌐 ONLINE - All features available
+        </div>
+        
         <div class="card">
             <h1>📍 GPS Coordinate Saver</h1>
-            <div class="status" id="status">Ready to save coordinates</div>
+            <div class="status" id="status">Ready to save coordinates (Works offline!)</div>
             
             <button class="save-btn" id="saveBtn" onclick="saveLocation()">
                 💾 Save Current Location
@@ -226,7 +287,7 @@
             <h1>📋 Saved Locations (<span id="count">0</span>)</h1>
             
             <div class="controls">
-                <button class="control-btn export-btn" onclick="exportLocations()">📤 Export</button>
+                <button class="control-btn export-btn" onclick="exportLocations()">📤 Export CSV</button>
                 <button class="control-btn clear-btn" onclick="clearAll()">🗑️ Clear All</button>
             </div>
             
@@ -239,6 +300,51 @@
         let locations = [];
         let map;
         let markers = [];
+        let deferredPrompt;
+        
+        // Check online/offline status
+        function updateOnlineStatus() {
+            const offlineBanner = document.getElementById('offlineBanner');
+            const onlineBanner = document.getElementById('onlineBanner');
+            
+            if (navigator.onLine) {
+                offlineBanner.style.display = 'none';
+                onlineBanner.style.display = 'block';
+                setTimeout(() => {
+                    onlineBanner.style.display = 'none';
+                }, 3000);
+            } else {
+                offlineBanner.style.display = 'block';
+                onlineBanner.style.display = 'none';
+            }
+        }
+        
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        
+        // PWA install prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('installPrompt').style.display = 'block';
+        });
+        
+        function installApp() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('App installed');
+                    }
+                    deferredPrompt = null;
+                    document.getElementById('installPrompt').style.display = 'none';
+                });
+            }
+        }
+        
+        function dismissInstall() {
+            document.getElementById('installPrompt').style.display = 'none';
+        }
         
         // Initialize map
         function initMap() {
@@ -254,7 +360,6 @@
         
         // Update map with all saved locations
         function updateMap() {
-            // Clear existing markers
             markers.forEach(marker => map.removeLayer(marker));
             markers = [];
             
@@ -263,7 +368,6 @@
                 return;
             }
             
-            // Add markers for each location
             const bounds = [];
             locations.forEach((loc, index) => {
                 const marker = L.marker([loc.latitude, loc.longitude]).addTo(map);
@@ -284,7 +388,6 @@
                 bounds.push([loc.latitude, loc.longitude]);
             });
             
-            // Fit map to show all markers
             if (bounds.length > 0) {
                 map.fitBounds(bounds, { padding: [50, 50] });
             }
@@ -301,7 +404,6 @@
                 const loc = locations[0];
                 window.open(`https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`, '_blank');
             } else {
-                // Create a Google Maps URL with all points
                 const origin = `${locations[locations.length - 1].latitude},${locations[locations.length - 1].longitude}`;
                 const destination = `${locations[0].latitude},${locations[0].longitude}`;
                 
@@ -346,22 +448,20 @@
             const btn = document.getElementById('saveBtn');
             const status = document.getElementById('status');
             
-            // Check if geolocation is supported
             if (!navigator.geolocation) {
-                alert('❌ Geolocation is not supported by your browser.\n\nPlease use Chrome, Safari, or Samsung Internet.');
+                alert('❌ Geolocation is not supported by your browser.\n\nPlease use Chrome, Safari, Firefox, or Samsung Internet.');
                 return;
             }
             
-            // Check permission status
             const permissionStatus = await checkLocationPermission();
             if (permissionStatus === 'denied') {
-                alert('❌ Location permission is DENIED.\n\nTo fix this:\n\n1. Tap the lock icon (🔒) or info icon (ⓘ) in the address bar\n2. Find "Location" permission\n3. Change it to "Allow"\n4. Refresh the page and try again\n\nOR\n\nGo to Chrome Settings → Site settings → Location → Allow');
+                alert('❌ Location permission is DENIED.\n\n⚠️ IMPORTANT: Local files (content://) cannot access GPS due to browser security.\n\nSOLUTION:\n1. Try opening this file in Firefox or Samsung Internet browser\n2. OR host it online (GitHub Pages)\n3. OR use the web version from claude.site\n\nGPS works offline once loaded from HTTPS!');
                 return;
             }
             
             btn.disabled = true;
-            btn.textContent = '📡 Getting location...';
-            status.textContent = 'Acquiring GPS signal... (may take 10-30 seconds)';
+            btn.textContent = '📡 Getting GPS fix...';
+            status.textContent = 'Acquiring satellites... (10-30 seconds, works offline!)';
             
             navigator.geolocation.getCurrentPosition(
                 (position) => {
@@ -389,7 +489,6 @@
                     btn.textContent = '💾 Save Current Location';
                     status.textContent = `Last saved: ${location.displayTime}`;
                     
-                    // Show current location
                     document.getElementById('currentLocation').style.display = 'block';
                     document.getElementById('currentCoords').textContent = 
                         `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
@@ -400,28 +499,34 @@
                     
                     switch(error.code) {
                         case error.PERMISSION_DENIED:
-                            errorMsg += 'Location permission was denied.';
-                            instructions = '\n\nTO FIX:\n\n1. Tap the lock (🔒) or info (ⓘ) icon in the browser address bar\n2. Find "Location" permission\n3. Change to "Allow"\n4. Refresh the page\n\nOR\n\nSettings → Apps → Chrome → Permissions → Location → Allow';
+                            errorMsg += 'Location permission was DENIED.';
+                            instructions = '\n\n⚠️ LOCAL FILE SECURITY ISSUE:\nChrome/browsers block GPS for local files (content://).\n\nSOLUTIONS:\n\n1. Try Firefox or Samsung Internet browser\n2. Host online (works offline after first load!)\n3. Open from claude.site instead\n\nGPS works WITHOUT internet, but needs HTTPS first time!';
                             break;
                         case error.POSITION_UNAVAILABLE:
-                            errorMsg += 'Location information is unavailable.';
-                            instructions = '\n\nTO FIX:\n\n1. Make sure Location/GPS is ON in phone settings\n2. Go outside or near a window\n3. Wait a minute for GPS to acquire satellites\n4. Try again';
+                            errorMsg += 'GPS signal unavailable.';
+                            instructions = '\n\nTO FIX:\n1. Enable Location/GPS in phone settings\n2. Go outside or near window\n3. Wait 1-2 minutes for satellite lock\n4. Try again';
                             break;
                         case error.TIMEOUT:
-                            errorMsg += 'Location request timed out.';
-                            instructions = '\n\nTO FIX:\n\n1. Make sure you have a clear view of the sky\n2. Wait longer (GPS can take 30-60 seconds)\n3. Try again';
+                            errorMsg += 'GPS timeout (30 seconds).';
+                            instructions = '\n\nTO FIX:\n1. Clear view of sky helps\n2. First GPS lock takes longer\n3. Try again (may take 60 seconds)';
                             break;
                         default:
-                            errorMsg += 'Unknown error occurred.';
-                            instructions = '\n\nError code: ' + error.code + '\nMessage: ' + error.message;
+                            errorMsg += 'Unknown error.';
+                            instructions = '\n\nError: ' + error.code + ' - ' + error.message;
                     }
                     
                     alert(errorMsg + instructions);
                     btn.disabled = false;
                     btn.textContent = '💾 Save Current Location';
-                    status.textContent = 'Error - Ready to try again';
+                    status.textContent = 'Ready to try again';
                     
-                    console.error('Geolocation error:', error);
+                    console.error('Geolocation error details:', {
+                        code: error.code,
+                        message: error.message,
+                        PERMISSION_DENIED: error.PERMISSION_DENIED,
+                        POSITION_UNAVAILABLE: error.POSITION_UNAVAILABLE,
+                        TIMEOUT: error.TIMEOUT
+                    });
                 },
                 {
                     enableHighAccuracy: true,
@@ -461,8 +566,6 @@
             const loc = locations[index];
             map.setView([loc.latitude, loc.longitude], 15);
             markers[index].openPopup();
-            
-            // Scroll to map
             document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
         
@@ -496,7 +599,7 @@
             a.click();
             window.URL.revokeObjectURL(url);
             
-            showSuccess('Locations exported!');
+            showSuccess('✅ Locations exported!');
         }
         
         // Clear all locations
@@ -526,6 +629,7 @@
         window.addEventListener('load', () => {
             initMap();
             loadLocations();
+            updateOnlineStatus();
         });
     </script>
 </body>
