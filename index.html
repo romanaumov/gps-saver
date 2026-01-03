@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Coordinate Saver</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .status {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .save-btn {
+            width: 100%;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .save-btn:active {
+            transform: scale(0.98);
+        }
+        
+        .save-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        
+        .current-location {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .location-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            font-size: 13px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .location-item:hover {
+            background: #e9ecef;
+        }
+        
+        .location-item .time {
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .location-item .coords {
+            color: #333;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }
+        
+        .delete-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 10;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .control-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .map-btn {
+            background: #3498db;
+            color: white;
+        }
+        
+        .export-btn {
+            background: #2ed573;
+            color: white;
+        }
+        
+        .clear-btn {
+            background: #ff4757;
+            color: white;
+        }
+        
+        .success {
+            background: #2ed573;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            text-align: center;
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 30px;
+            font-size: 14px;
+        }
+        
+        #map {
+            height: 400px;
+            border-radius: 15px;
+            margin-top: 15px;
+        }
+        
+        .map-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .leaflet-popup-content {
+            font-size: 13px;
+        }
+        
+        .popup-content {
+            min-width: 200px;
+        }
+        
+        .popup-content strong {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>📍 GPS Coordinate Saver</h1>
+            <div class="status" id="status">Ready to save coordinates</div>
+            
+            <button class="save-btn" id="saveBtn" onclick="saveLocation()">
+                💾 Save Current Location
+            </button>
+            
+            <div class="current-location" id="currentLocation" style="display:none;">
+                <strong>Current Position:</strong><br>
+                <span id="currentCoords"></span>
+            </div>
+            
+            <div id="successMessage" style="display:none;" class="success"></div>
+        </div>
+        
+        <div class="card">
+            <h1>🗺️ Map View</h1>
+            <div id="map"></div>
+            <div class="map-controls">
+                <button class="control-btn map-btn" onclick="openInGoogleMaps()">📱 Open in Google Maps</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h1>📋 Saved Locations (<span id="count">0</span>)</h1>
+            
+            <div class="controls">
+                <button class="control-btn export-btn" onclick="exportLocations()">📤 Export</button>
+                <button class="control-btn clear-btn" onclick="clearAll()">🗑️ Clear All</button>
+            </div>
+            
+            <div id="locationsList" style="margin-top: 20px;"></div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        let locations = [];
+        let map;
+        let markers = [];
+        
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([0, 0], 2);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+            
+            updateMap();
+        }
+        
+        // Update map with all saved locations
+        function updateMap() {
+            // Clear existing markers
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+            
+            if (locations.length === 0) {
+                map.setView([0, 0], 2);
+                return;
+            }
+            
+            // Add markers for each location
+            const bounds = [];
+            locations.forEach((loc, index) => {
+                const marker = L.marker([loc.latitude, loc.longitude]).addTo(map);
+                
+                const popupContent = `
+                    <div class="popup-content">
+                        <strong>Location ${locations.length - index}</strong><br>
+                        <strong>Time:</strong> ${loc.displayTime}<br>
+                        <strong>Lat:</strong> ${loc.latitude.toFixed(6)}<br>
+                        <strong>Lon:</strong> ${loc.longitude.toFixed(6)}<br>
+                        <strong>Accuracy:</strong> ±${Math.round(loc.accuracy)}m<br>
+                        <a href="https://www.google.com/maps?q=${loc.latitude},${loc.longitude}" target="_blank" style="color: #667eea; text-decoration: none;">→ Open in Google Maps</a>
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent);
+                markers.push(marker);
+                bounds.push([loc.latitude, loc.longitude]);
+            });
+            
+            // Fit map to show all markers
+            if (bounds.length > 0) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+        
+        // Open all locations in Google Maps
+        function openInGoogleMaps() {
+            if (locations.length === 0) {
+                alert('No locations to display!');
+                return;
+            }
+            
+            if (locations.length === 1) {
+                const loc = locations[0];
+                window.open(`https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`, '_blank');
+            } else {
+                // Create a Google Maps URL with all points
+                const origin = `${locations[locations.length - 1].latitude},${locations[locations.length - 1].longitude}`;
+                const destination = `${locations[0].latitude},${locations[0].longitude}`;
+                
+                let waypoints = '';
+                if (locations.length > 2) {
+                    const middlePoints = locations.slice(1, -1).map(loc => 
+                        `${loc.latitude},${loc.longitude}`
+                    ).join('|');
+                    waypoints = `&waypoints=${middlePoints}`;
+                }
+                
+                const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${waypoints}`;
+                window.open(url, '_blank');
+            }
+        }
+        
+        // Load saved locations
+        function loadLocations() {
+            const saved = localStorage.getItem('gpsLocations');
+            if (saved) {
+                locations = JSON.parse(saved);
+                displayLocations();
+                updateMap();
+            }
+        }
+        
+        // Check if permissions API is available
+        async function checkLocationPermission() {
+            if (navigator.permissions) {
+                try {
+                    const result = await navigator.permissions.query({ name: 'geolocation' });
+                    return result.state;
+                } catch (e) {
+                    return 'prompt';
+                }
+            }
+            return 'prompt';
+        }
+        
+        // Get current location and save it
+        async function saveLocation() {
+            const btn = document.getElementById('saveBtn');
+            const status = document.getElementById('status');
+            
+            // Check if geolocation is supported
+            if (!navigator.geolocation) {
+                alert('❌ Geolocation is not supported by your browser.\n\nPlease use Chrome, Safari, or Samsung Internet.');
+                return;
+            }
+            
+            // Check permission status
+            const permissionStatus = await checkLocationPermission();
+            if (permissionStatus === 'denied') {
+                alert('❌ Location permission is DENIED.\n\nTo fix this:\n\n1. Tap the lock icon (🔒) or info icon (ⓘ) in the address bar\n2. Find "Location" permission\n3. Change it to "Allow"\n4. Refresh the page and try again\n\nOR\n\nGo to Chrome Settings → Site settings → Location → Allow');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = '📡 Getting location...';
+            status.textContent = 'Acquiring GPS signal... (may take 10-30 seconds)';
+            
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+                    const timestamp = new Date().toISOString();
+                    
+                    const location = {
+                        latitude: lat,
+                        longitude: lon,
+                        accuracy: accuracy,
+                        timestamp: timestamp,
+                        displayTime: new Date().toLocaleString()
+                    };
+                    
+                    locations.unshift(location);
+                    localStorage.setItem('gpsLocations', JSON.stringify(locations));
+                    
+                    displayLocations();
+                    updateMap();
+                    showSuccess(`✅ Location saved! Accuracy: ±${Math.round(accuracy)}m`);
+                    
+                    btn.disabled = false;
+                    btn.textContent = '💾 Save Current Location';
+                    status.textContent = `Last saved: ${location.displayTime}`;
+                    
+                    // Show current location
+                    document.getElementById('currentLocation').style.display = 'block';
+                    document.getElementById('currentCoords').textContent = 
+                        `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+                },
+                (error) => {
+                    let errorMsg = '❌ Error getting location\n\n';
+                    let instructions = '';
+                    
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMsg += 'Location permission was denied.';
+                            instructions = '\n\nTO FIX:\n\n1. Tap the lock (🔒) or info (ⓘ) icon in the browser address bar\n2. Find "Location" permission\n3. Change to "Allow"\n4. Refresh the page\n\nOR\n\nSettings → Apps → Chrome → Permissions → Location → Allow';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMsg += 'Location information is unavailable.';
+                            instructions = '\n\nTO FIX:\n\n1. Make sure Location/GPS is ON in phone settings\n2. Go outside or near a window\n3. Wait a minute for GPS to acquire satellites\n4. Try again';
+                            break;
+                        case error.TIMEOUT:
+                            errorMsg += 'Location request timed out.';
+                            instructions = '\n\nTO FIX:\n\n1. Make sure you have a clear view of the sky\n2. Wait longer (GPS can take 30-60 seconds)\n3. Try again';
+                            break;
+                        default:
+                            errorMsg += 'Unknown error occurred.';
+                            instructions = '\n\nError code: ' + error.code + '\nMessage: ' + error.message;
+                    }
+                    
+                    alert(errorMsg + instructions);
+                    btn.disabled = false;
+                    btn.textContent = '💾 Save Current Location';
+                    status.textContent = 'Error - Ready to try again';
+                    
+                    console.error('Geolocation error details:', {
+                        code: error.code,
+                        message: error.message,
+                        PERMISSION_DENIED: error.PERMISSION_DENIED,
+                        POSITION_UNAVAILABLE: error.POSITION_UNAVAILABLE,
+                        TIMEOUT: error.TIMEOUT
+                    });
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 30000,
+                    maximumAge: 0
+                }
+            );
+        }
+        
+        // Display all saved locations
+        function displayLocations() {
+            const list = document.getElementById('locationsList');
+            const count = document.getElementById('count');
+            
+            count.textContent = locations.length;
+            
+            if (locations.length === 0) {
+                list.innerHTML = '<div class="empty-state">No saved locations yet.<br>Press the button above to save your first location!</div>';
+                return;
+            }
+            
+            list.innerHTML = locations.map((loc, index) => `
+                <div class="location-item" onclick="focusOnMarker(${index})">
+                    <button class="delete-btn" onclick="event.stopPropagation(); deleteLocation(${index})">×</button>
+                    <div class="time">📍 Location ${locations.length - index} - ${loc.displayTime}</div>
+                    <div class="coords">
+                        Lat: ${loc.latitude.toFixed(6)}<br>
+                        Lon: ${loc.longitude.toFixed(6)}<br>
+                        Accuracy: ±${Math.round(loc.accuracy)}m
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Focus on a specific marker on the map
+        function focusOnMarker(index) {
+            const loc = locations[index];
+            map.setView([loc.latitude, loc.longitude], 15);
+            markers[index].openPopup();
+            
+            // Scroll to map
+            document.getElementById('map').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        
+        // Delete a single location
+        function deleteLocation(index) {
+            if (confirm('Delete this location?')) {
+                locations.splice(index, 1);
+                localStorage.setItem('gpsLocations', JSON.stringify(locations));
+                displayLocations();
+                updateMap();
+            }
+        }
+        
+        // Export locations as CSV
+        function exportLocations() {
+            if (locations.length === 0) {
+                alert('No locations to export!');
+                return;
+            }
+            
+            let csv = 'Timestamp,Latitude,Longitude,Accuracy (meters)\n';
+            locations.forEach(loc => {
+                csv += `"${loc.displayTime}",${loc.latitude},${loc.longitude},${loc.accuracy}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `gps-coordinates-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            showSuccess('Locations exported!');
+        }
+        
+        // Clear all locations
+        function clearAll() {
+            if (locations.length === 0) return;
+            
+            if (confirm(`Delete all ${locations.length} saved locations?`)) {
+                locations = [];
+                localStorage.setItem('gpsLocations', JSON.stringify(locations));
+                displayLocations();
+                updateMap();
+                showSuccess('All locations cleared');
+            }
+        }
+        
+        // Show success message
+        function showSuccess(message) {
+            const msgDiv = document.getElementById('successMessage');
+            msgDiv.textContent = message;
+            msgDiv.style.display = 'block';
+            setTimeout(() => {
+                msgDiv.style.display = 'none';
+            }, 3000);
+        }
+        
+        // Initialize everything when page loads
+        window.addEventListener('load', () => {
+            initMap();
+            loadLocations();
+        });
+    </script>
+</body>
+</html>
