@@ -421,13 +421,7 @@
                     btn.textContent = '💾 Save Current Location';
                     status.textContent = 'Error - Ready to try again';
                     
-                    console.error('Geolocation error details:', {
-                        code: error.code,
-                        message: error.message,
-                        PERMISSION_DENIED: error.PERMISSION_DENIED,
-                        POSITION_UNAVAILABLE: error.POSITION_UNAVAILABLE,
-                        TIMEOUT: error.TIMEOUT
-                    });
+                    console.error('Geolocation error:', error);
                 },
                 {
                     enableHighAccuracy: true,
